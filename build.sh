@@ -23,7 +23,7 @@ fi
 mkdir out
 
 SOURCES=(
-    #source/com/aletheiaware/colour/Colour.java
+    source/com/aletheiaware/colour/CanvasLoader.java
     source/com/aletheiaware/colour/ColourProto.java
     source/com/aletheiaware/colour/utils/ColourUtils.java
 )

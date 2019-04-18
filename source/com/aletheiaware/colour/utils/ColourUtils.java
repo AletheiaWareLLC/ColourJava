@@ -18,10 +18,12 @@ package com.aletheiaware.colour.utils;
 
 import com.aletheiaware.bc.BC.Channel;
 import com.aletheiaware.bc.BC.Channel.EntryCallback;
+import com.aletheiaware.bc.BC.Node;
 import com.aletheiaware.bc.BCProto.Block;
 import com.aletheiaware.bc.BCProto.BlockEntry;
 import com.aletheiaware.bc.BCProto.PublicKeyFormat;
 import com.aletheiaware.bc.BCProto.Record;
+import com.aletheiaware.bc.BCProto.Record.Access;
 import com.aletheiaware.bc.BCProto.Reference;
 import com.aletheiaware.bc.BCProto.SignatureAlgorithm;
 import com.aletheiaware.bc.utils.BCUtils;
@@ -34,6 +36,7 @@ import com.aletheiaware.colour.ColourProto.Vote;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -41,6 +44,7 @@ import java.net.InetAddress;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -52,12 +56,17 @@ import java.security.spec.KeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 
 public final class ColourUtils {
 
@@ -68,7 +77,8 @@ public final class ColourUtils {
     public static final String COLOUR_WEBSITE = "https://colour.aletheiaware.com";
     public static final String COLOUR_WEBSITE_TEST = "https://test-colour.aletheiaware.com";
 
-    public static final String COLOUR_PREFIX_CANVAS = "Colour-Canvas-";
+    public static final String COLOUR_PREFIX_CANVAS = "Colour-Canvas-"; // Append Year
+    // Application-{Tool,Feature}-Hash
     public static final String COLOUR_PREFIX_PURCHASE = "Colour-Purchase-";
     public static final String COLOUR_PREFIX_VOTE = "Colour-Vote-";
 
@@ -79,7 +89,7 @@ public final class ColourUtils {
     }
 
     /**
-     * Sorts a list of Record hashes by the timestamp of the Meta they map to.
+     * Sorts a list of Record hashes by the timestamp of the Canvas they map to.
      */
     public static void sort(List<ByteString> hashes, Map<ByteString, Long> timestamps, boolean chronologically) {
         Collections.sort(hashes, new Comparator<ByteString>() {
@@ -99,6 +109,22 @@ public final class ColourUtils {
                 return Long.compare(t2, t1);
             }
         });
+    }
+
+    public static int getYear() {
+        return Calendar.getInstance().get(Calendar.YEAR);
+    }
+
+    public static Channel getCanvasesChannel(File cache, InetAddress host) {
+        return new Channel(COLOUR_PREFIX_CANVAS + getYear(), BCUtils.THRESHOLD_STANDARD, cache, host);
+    }
+
+    public static Channel getPurchasesChannel(String canvasId, File cache, InetAddress host) {
+        return new Channel(COLOUR_PREFIX_PURCHASE + canvasId, BCUtils.THRESHOLD_STANDARD, cache, host);
+    }
+
+    public static Channel getVotesChannel(String canvasId, File cache, InetAddress host) {
+        return new Channel(COLOUR_PREFIX_VOTE + canvasId, BCUtils.THRESHOLD_STANDARD, cache, host);
     }
 
     public static Canvas getCanvas(Channel canvases, byte[] recordHash) throws IOException {
@@ -295,5 +321,53 @@ public final class ColourUtils {
             }
         });
         return purchasedColour[0];
+    }
+
+    public static byte[] mineCanvasRecord(Node node, Channel canvases, String alias, KeyPair keys, Canvas canvas) throws BadPaddingException, IOException, IllegalBlockSizeException, InvalidAlgorithmParameterException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, SignatureException {
+        Map<String, PublicKey> acl = new HashMap<>();
+        List<Reference> refs = new ArrayList<>();
+        Record canvasRecord = BCUtils.createRecord(alias, keys, acl, refs, canvas.toByteArray());
+        byte[] canvasRecordHashBytes = BCUtils.getHash(canvasRecord.toByteArray());
+        ByteString canvasRecordHash = ByteString.copyFrom(canvasRecordHashBytes);
+        List<BlockEntry> canvasEntries = new ArrayList<>();
+        canvasEntries.add(BlockEntry.newBuilder()
+                .setRecordHash(canvasRecordHash)
+                .setRecord(canvasRecord)
+                .build());
+        BCUtils.Pair<byte[], Block> canvasResult = node.mine(canvases, canvasEntries);
+        System.out.println("Mined Canvas " + new String(BCUtils.encodeBase64URL(canvasResult.a)));
+        return canvasRecordHashBytes;
+    }
+
+    public static byte[] mineVoteRecord(Node node, Channel votes, String alias, KeyPair keys, Vote vote) throws BadPaddingException, IOException, IllegalBlockSizeException, InvalidAlgorithmParameterException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, SignatureException {
+        Map<String, PublicKey> acl = new HashMap<>();
+        List<Reference> refs = new ArrayList<>();
+        Record voteRecord = BCUtils.createRecord(alias, keys, acl, refs, vote.toByteArray());
+        byte[] voteRecordHashBytes = BCUtils.getHash(voteRecord.toByteArray());
+        ByteString voteRecordHash = ByteString.copyFrom(voteRecordHashBytes);
+        List<BlockEntry> voteEntries = new ArrayList<>();
+        voteEntries.add(BlockEntry.newBuilder()
+                .setRecordHash(voteRecordHash)
+                .setRecord(voteRecord)
+                .build());
+        BCUtils.Pair<byte[], Block> voteResult = node.mine(votes, voteEntries);
+        System.out.println("Mined Vote " + new String(BCUtils.encodeBase64URL(voteResult.a)));
+        return voteRecordHashBytes;
+    }
+
+    public static byte[] minePurchaseRecord(Node node, Channel purchases, String alias, KeyPair keys, Purchase purchase) throws BadPaddingException, IOException, IllegalBlockSizeException, InvalidAlgorithmParameterException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, SignatureException {
+        Map<String, PublicKey> acl = new HashMap<>();
+        List<Reference> refs = new ArrayList<>();
+        Record purchaseRecord = BCUtils.createRecord(alias, keys, acl, refs, purchase.toByteArray());
+        byte[] purchaseRecordHashBytes = BCUtils.getHash(purchaseRecord.toByteArray());
+        ByteString purchaseRecordHash = ByteString.copyFrom(purchaseRecordHashBytes);
+        List<BlockEntry> purchaseEntries = new ArrayList<>();
+        purchaseEntries.add(BlockEntry.newBuilder()
+                .setRecordHash(purchaseRecordHash)
+                .setRecord(purchaseRecord)
+                .build());
+        BCUtils.Pair<byte[], Block> purchaseResult = node.mine(purchases, purchaseEntries);
+        System.out.println("Mined Purchase " + new String(BCUtils.encodeBase64URL(purchaseResult.a)));
+        return purchaseRecordHashBytes;
     }
 }
