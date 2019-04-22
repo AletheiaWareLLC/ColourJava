@@ -50,12 +50,6 @@ public abstract class CanvasLoader {
         this.host = host;
         this.canvasRecordHash = canvasRecordHash;
         canvasId = new String(BCUtils.encodeBase64URL(canvasRecordHash));
-        new Thread() {
-            @Override
-            public void run() {
-                loadCanvas();
-            }
-        }.start();
     }
 
     public String getCanvasId() {
