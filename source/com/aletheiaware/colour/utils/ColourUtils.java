@@ -74,8 +74,6 @@ public final class ColourUtils {
 
     public static final String COLOUR_HOST = "colour.aletheiaware.com";
     public static final String COLOUR_HOST_TEST = "test-colour.aletheiaware.com";
-    public static final String COLOUR_WEBSITE = "https://colour.aletheiaware.com";
-    public static final String COLOUR_WEBSITE_TEST = "https://test-colour.aletheiaware.com";
 
     public static final String COLOUR_PREFIX_CANVAS = "Colour-Canvas-"; // Append Year
     // Application-{Tool,Feature}-Hash
